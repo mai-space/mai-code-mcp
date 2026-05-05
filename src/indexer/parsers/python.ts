@@ -10,6 +10,16 @@ interface SymbolInfo {
   content: string;
 }
 
+function getIndent(line: string): number {
+  let count = 0;
+  for (const ch of line) {
+    if (ch === ' ') count++;
+    else if (ch === '\t') count += 4;
+    else break;
+  }
+  return count;
+}
+
 function extractPythonSymbols(lines: string[]): SymbolInfo[] {
   const symbols: SymbolInfo[] = [];
   const funcRegex = /^(?:async\s+)?def\s+(\w+)\s*\(/;
@@ -20,33 +30,42 @@ function extractPythonSymbols(lines: string[]): SymbolInfo[] {
     const line = lines[i];
     let match: RegExpMatchArray | null;
 
-    if ((match = line.match(classRegex))) {
-      const startLine = i;
+    if ((match = line.match(classRegex)) || (match = line.match(funcRegex))) {
+      const kind = line.match(classRegex) ? 'class' : 'function';
       const name = match[1];
+      const startLine = i;
+      const baseIndent = getIndent(line);
       i++;
-      while (i < lines.length && (lines[i].startsWith('    ') || lines[i].startsWith('\t') || lines[i].trim() === '')) {
-        i++;
+
+      // Collect body lines: indented more than baseIndent, plus blank lines between them
+      let lastBodyLine = i - 1;
+      while (i < lines.length) {
+        const current = lines[i];
+        if (current.trim() === '') {
+          // blank line - peek ahead to see if next non-blank line is still indented
+          let j = i + 1;
+          while (j < lines.length && lines[j].trim() === '') j++;
+          if (j < lines.length && getIndent(lines[j]) > baseIndent) {
+            i = j; // skip blanks and continue
+            lastBodyLine = i;
+            i++;
+          } else {
+            break; // blank line followed by same/lower indent = end of symbol
+          }
+        } else if (getIndent(current) > baseIndent) {
+          lastBodyLine = i;
+          i++;
+        } else {
+          break;
+        }
       }
+
       symbols.push({
         name,
-        kind: 'class',
+        kind,
         startLine,
-        endLine: i - 1,
-        content: lines.slice(startLine, i).join('\n'),
-      });
-    } else if ((match = line.match(funcRegex))) {
-      const startLine = i;
-      const name = match[1];
-      i++;
-      while (i < lines.length && (lines[i].startsWith('    ') || lines[i].startsWith('\t') || lines[i].trim() === '')) {
-        i++;
-      }
-      symbols.push({
-        name,
-        kind: 'function',
-        startLine,
-        endLine: i - 1,
-        content: lines.slice(startLine, i).join('\n'),
+        endLine: lastBodyLine,
+        content: lines.slice(startLine, lastBodyLine + 1).join('\n'),
       });
     } else {
       i++;
