@@ -34,7 +34,7 @@ export class GenericParser implements Parser {
 
       if (endLine >= lines.length) break;
       startLine = endLine - overlapLines;
-      if (startLine <= 0) startLine = endLine;
+      if (startLine < 0) startLine = 0;
     }
 
     return chunks;
