@@ -1,0 +1,28 @@
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY tsconfig.json ./
+COPY bin/ ./bin/
+COPY src/ ./src/
+
+RUN npm run build
+
+FROM node:20-alpine AS runtime
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+COPY --from=builder /app/dist ./dist
+
+RUN chmod +x dist/bin/mai-code.js
+
+EXPOSE 3000
+
+ENTRYPOINT ["node", "dist/bin/mai-code.js"]
+CMD ["serve"]
