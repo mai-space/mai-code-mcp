@@ -1,0 +1,23 @@
+{
+  "model": "ollama:nomic-embed-text",
+  "store": "qdrant:local",
+  "chunkSize": 512,
+  "chunkOverlap": 64,
+  "concurrency": 8,
+  "include": ["src/**/*", "Classes/**/*", "Configuration/**/*"],
+  "exclude": ["**/*.test.*", "**/fixtures/**", "**/vendor/**"],
+  "languages": ["typescript", "php", "python", "rust", "go"],
+  "ollama": {
+    "baseUrl": "http://localhost:11434"
+  },
+  "qdrant": {
+    "url": "http://localhost:6333"
+  },
+  "chroma": {
+    "path": "http://localhost:8000"
+  },
+  "mcp": {
+    "port": 3000,
+    "host": "127.0.0.1"
+  }
+}
