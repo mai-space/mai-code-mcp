@@ -74,7 +74,7 @@ git clone https://github.com/mai-space/mai-code-mcp.git
 cd mai-code-mcp
 npm install
 npm run build
-npm install -g .
+npm link
 ```
 
 After installation the `mai-code` binary is available in your `PATH`.
@@ -97,7 +97,9 @@ To update `mai-code` to the latest version, run:
 mai-code update
 ```
 
-This pulls the latest commits from the repository, rebuilds, and reinstalls the global binary in one step.
+This pulls the latest commits from the repository, rebuilds, and re-links the global binary in one step.
+
+> **Note:** `mai-code update` requires a symlink-based installation (i.e. installed via the one-liner or `npm link`). It will not work if the package was installed by copying files (e.g. `npm install -g .` without linking).
 
 ---
 

@@ -252,7 +252,7 @@ export function createCLI(): Command {
         execSync('git pull --ff-only', { cwd: packageRoot, stdio: 'inherit' });
         execSync('npm install', { cwd: packageRoot, stdio: 'inherit' });
         execSync('npm run build', { cwd: packageRoot, stdio: 'inherit' });
-        execSync(`npm install -g "${packageRoot}"`, { stdio: 'inherit' });
+        execSync('npm link', { cwd: packageRoot, stdio: 'inherit' });
         console.log('✓ mai-code-mcp updated successfully.');
       } catch (err) {
         console.error('Update failed:', err instanceof Error ? err.message : err);

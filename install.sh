@@ -32,6 +32,8 @@ fi
 if [ -d "${INSTALL_DIR}/.git" ]; then
   info "Updating existing installation in ${INSTALL_DIR} …"
   git -C "${INSTALL_DIR}" pull --ff-only
+elif [ -e "${INSTALL_DIR}" ]; then
+  err "'${INSTALL_DIR}' already exists but is not a git repository. Remove it or set MAI_CODE_DIR to a different path and retry."
 else
   info "Cloning mai-code-mcp into ${INSTALL_DIR} …"
   git clone --depth 1 "${REPO_URL}" "${INSTALL_DIR}"
@@ -45,8 +47,8 @@ npm --prefix "${INSTALL_DIR}" install
 info "Building …"
 npm --prefix "${INSTALL_DIR}" run build
 
-info "Installing mai-code globally …"
-npm install -g "${INSTALL_DIR}"
+info "Linking mai-code globally …"
+(cd "${INSTALL_DIR}" && npm link)
 
 ok "mai-code installed successfully! Run 'mai-code --help' to get started."
 ok "To update in the future, run: mai-code update"
