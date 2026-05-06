@@ -1,0 +1,24 @@
+{
+  "defaultModel": "ollama:nomic-embed-text",
+  "defaultStore": "qdrant:http://localhost:6333",
+  "chunkSize": 512,
+  "chunkOverlap": 64,
+  "concurrency": 8,
+  "ignore": ["**/*.test.*", "**/fixtures/**"],
+  "ollama": {
+    "baseUrl": "http://localhost:11434"
+  },
+  "openai": {
+    "apiKey": "sk-..."
+  },
+  "cohere": {
+    "apiKey": "..."
+  },
+  "qdrant": {
+    "url": "http://localhost:6333",
+    "apiKey": ""
+  },
+  "chroma": {
+    "path": "http://localhost:8000"
+  }
+}
