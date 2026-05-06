@@ -1,3 +1,7 @@
+import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+import { existsSync } from 'fs';
 import { Command } from 'commander';
 import { loadConfig } from './config.js';
 import { createEmbeddingProvider } from '../embeddings/factory.js';
@@ -6,6 +10,10 @@ import { ProjectRegistry } from '../store/project-registry.js';
 import { indexProject, reindexProject } from '../indexer/pipeline.js';
 import { startServer } from '../mcp/server.js';
 import { logger } from '../utils/logger.js';
+
+// Resolve the package root from this compiled file (dist/src/cli/args.js → ../../..)
+const __filename = fileURLToPath(import.meta.url);
+const packageRoot = resolve(dirname(__filename), '../../..');
 
 export function createCLI(): Command {
   const program = new Command();
@@ -225,6 +233,30 @@ export function createCLI(): Command {
         }
       } finally {
         registry.close();
+      }
+    });
+
+  program
+    .command('update')
+    .description('Update mai-code-mcp to the latest version')
+    .action(() => {
+      console.log(`Updating mai-code-mcp from ${packageRoot} …`);
+      if (!existsSync(resolve(packageRoot, '.git'))) {
+        console.error(
+          'Error: update requires a git-based installation.\n' +
+          'Re-install using the one-liner: curl -fsSL https://raw.githubusercontent.com/mai-space/mai-code-mcp/main/install.sh | bash'
+        );
+        process.exit(1);
+      }
+      try {
+        execSync('git pull --ff-only', { cwd: packageRoot, stdio: 'inherit' });
+        execSync('npm install', { cwd: packageRoot, stdio: 'inherit' });
+        execSync('npm run build', { cwd: packageRoot, stdio: 'inherit' });
+        execSync(`npm install -g "${packageRoot}"`, { stdio: 'inherit' });
+        console.log('✓ mai-code-mcp updated successfully.');
+      } catch (err) {
+        console.error('Update failed:', err instanceof Error ? err.message : err);
+        process.exit(1);
       }
     });
 
