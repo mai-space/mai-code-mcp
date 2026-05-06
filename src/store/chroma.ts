@@ -139,10 +139,14 @@ export class ChromaStore implements VectorStore {
     const collection = await this.getCollection(project);
     const fileMap = new Map<string, { language: string; count: number }>();
 
-    // Paginate to avoid loading the entire collection into memory at once
+    // Paginate to avoid loading the entire collection into memory at once.
+    // MAX_PAGES is a safety cap against infinite loops if the collection changes
+    // during iteration (e.g. concurrent writes) or if the termination condition
+    // somehow never fires.
     const PAGE_SIZE = 1000;
+    const MAX_PAGES = 10_000; // up to 10 million chunks
     let offset = 0;
-    while (true) {
+    for (let page = 0; page < MAX_PAGES; page++) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const results = await collection.get({ include: ['metadatas'] as any, limit: PAGE_SIZE, offset });
       for (const meta of results.metadatas) {

@@ -116,10 +116,11 @@ export async function reindexProject(
   await batchProcess(files, concurrency, async (file) => {
     const prevHash = oldManifest.get(file.relativePath);
 
-    // Skip unchanged files
+    // Skip unchanged files — their chunks are already in the store
     if (prevHash === file.contentHash) {
       newManifest.set(file.relativePath, file.contentHash);
-      // Count existing chunks toward total (approximate via old manifest presence)
+      // Note: totalChunkCount only counts newly indexed chunks in this run;
+      // unchanged files retain their existing chunks in the vector store.
       return;
     }
 
