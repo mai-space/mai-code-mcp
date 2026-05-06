@@ -10,6 +10,10 @@ Index your code automatically and let AI agents use it via the [Model Context Pr
 
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
+  - [One-liner install](#one-liner-install)
+  - [Manual install](#manual-install)
+  - [Run without installing](#run-without-installing-npx--tsx)
+  - [Updating](#updating)
 - [Configuration](#configuration)
 - [Usage](#usage)
   - [Index a project](#index-a-project)
@@ -47,14 +51,30 @@ docker exec -it <ollama-container> ollama pull nomic-embed-text
 
 ## Installation
 
-### Install globally from the repository
+### One-liner install
+
+Requires **git**, **Node.js ≥ 20**, and **npm**.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mai-space/mai-code-mcp/main/install.sh | bash
+```
+
+> **Tip:** Before piping to bash you can review the script at the URL above.
+
+This clones the repository to `~/.mai-code-mcp`, builds it, and installs the `mai-code` binary globally. Set `MAI_CODE_DIR` to override the install location:
+
+```bash
+MAI_CODE_DIR=/opt/mai-code-mcp curl -fsSL https://raw.githubusercontent.com/mai-space/mai-code-mcp/main/install.sh | bash
+```
+
+### Manual install
 
 ```bash
 git clone https://github.com/mai-space/mai-code-mcp.git
 cd mai-code-mcp
 npm install
 npm run build
-npm install -g .
+npm link
 ```
 
 After installation the `mai-code` binary is available in your `PATH`.
@@ -68,6 +88,18 @@ node dist/bin/mai-code.js <command>
 # Using tsx during development
 npx tsx bin/mai-code.ts <command>
 ```
+
+### Updating
+
+To update `mai-code` to the latest version, run:
+
+```bash
+mai-code update
+```
+
+This pulls the latest commits from the repository, rebuilds, and re-links the global binary in one step.
+
+> **Note:** `mai-code update` requires a symlink-based installation (i.e. installed via the one-liner or `npm link`). It will not work if the package was installed by copying files (e.g. `npm install -g .` without linking).
 
 ---
 
@@ -228,6 +260,9 @@ mai-code purge --project my-app
 
 # Delete all project indexes
 mai-code purge --all
+
+# Update mai-code to the latest version
+mai-code update
 ```
 
 ---
