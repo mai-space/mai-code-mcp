@@ -22,7 +22,5 @@ COPY --from=builder /app/dist ./dist
 
 RUN chmod +x dist/bin/mai-code.js
 
-EXPOSE 3000
-
 ENTRYPOINT ["node", "dist/bin/mai-code.js"]
 CMD ["serve"]

@@ -5,6 +5,9 @@ import ignoreFactory from 'ignore';
 import type { Ignore } from 'ignore';
 import { contentHash } from '../utils/hash.js';
 
+/** Sentinel language returned for text files with unrecognised extensions. */
+export const UNKNOWN_LANGUAGE = 'unknown';
+
 export interface FileEntry {
   path: string;
   relativePath: string;
@@ -88,6 +91,12 @@ export async function walkDirectory(
     ig.add(gitignoreContent);
   }
 
+  const maiCodeIgnorePath = join(rootPath, '.mai-codeignore');
+  if (existsSync(maiCodeIgnorePath)) {
+    const maiCodeIgnoreContent = readFileSync(maiCodeIgnorePath, 'utf8');
+    ig.add(maiCodeIgnoreContent);
+  }
+
   ig.add(['node_modules/', '.git/', 'dist/', 'build/', '__pycache__/', 'vendor/']);
   ig.add(additionalIgnore);
 
@@ -103,7 +112,8 @@ export async function walkDirectory(
 
     for (const item of items) {
       const fullPath = join(dirPath, item);
-      const relPath = relative(rootPath, fullPath);
+      // Normalise to forward slashes so `ignore` patterns match on Windows too
+      const relPath = relative(rootPath, fullPath).replace(/\\/g, '/');
 
       if (ig.ignores(relPath)) continue;
 
@@ -120,17 +130,20 @@ export async function walkDirectory(
       } else if (fileStat.isFile()) {
         if (shouldSkipFile(item)) continue;
 
-        const language = getLanguage(item);
-        if (!language) continue;
-
         if (fileStat.size > 1024 * 1024) continue;
 
-        let fileContent: string;
+        // Read as raw buffer first to detect binary content (null bytes)
+        let buffer: Buffer;
         try {
-          fileContent = await readFile(fullPath, 'utf8');
+          buffer = await readFile(fullPath);
         } catch {
           continue;
         }
+        const sampleSize = Math.min(buffer.length, 8192);
+        if (buffer.subarray(0, sampleSize).includes(0)) continue; // binary file
+
+        const fileContent = buffer.toString('utf8');
+        const language = getLanguage(item) ?? UNKNOWN_LANGUAGE;
 
         entries.push({
           path: fullPath,

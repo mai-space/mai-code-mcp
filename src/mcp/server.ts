@@ -24,7 +24,7 @@ import { getListFilesTool, handleListFiles, type ListFilesArgs } from './tools/l
 import { getProjectStats } from './resources/project_stats.js';
 import { logger } from '../utils/logger.js';
 
-export async function startServer(config: Config, _port?: number, _host?: string): Promise<void> {
+export async function startServer(config: Config): Promise<void> {
   const registry = new ProjectRegistry();
 
   const server = new Server(
@@ -81,15 +81,36 @@ export async function startServer(config: Config, _port?: number, _host?: string
             throw new Error('No projects specified');
           }
 
-          const firstProject = registry.get(multiArgs.projects[0]);
-          if (!firstProject) throw new Error(`Project '${multiArgs.projects[0]}' not found`);
+          // Validate that all requested projects exist and share the same model + store
+          const projectRecords = multiArgs.projects.map((name) => {
+            const rec = registry.get(name);
+            if (!rec) throw new Error(`Project '${name}' not found`);
+            return rec;
+          });
 
-          const provider = createEmbeddingProvider(firstProject.model, {
+          const referenceModel = projectRecords[0].model;
+          const referenceStore = projectRecords[0].store;
+          for (const rec of projectRecords) {
+            if (rec.model !== referenceModel) {
+              throw new Error(
+                `search_code_multi requires all projects to use the same embedding model. ` +
+                  `Project '${rec.name}' uses '${rec.model}' but '${projectRecords[0].name}' uses '${referenceModel}'.`
+              );
+            }
+            if (rec.store !== referenceStore) {
+              throw new Error(
+                `search_code_multi requires all projects to use the same vector store. ` +
+                  `Project '${rec.name}' uses '${rec.store}' but '${projectRecords[0].name}' uses '${referenceStore}'.`
+              );
+            }
+          }
+
+          const provider = createEmbeddingProvider(referenceModel, {
             ollama: config.ollama,
             openai: config.openai,
             cohere: config.cohere,
           });
-          const store = createVectorStore(firstProject.store, {
+          const store = createVectorStore(referenceStore, {
             qdrant: config.qdrant,
             chroma: config.chroma,
           });

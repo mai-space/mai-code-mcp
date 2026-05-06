@@ -1,6 +1,7 @@
 import type { Parser, ParseOptions } from './base.js';
 import type { Chunk } from '../../store/store.js';
 import { chunkId } from '../../utils/hash.js';
+import { slidingWindowChunks } from './generic.js';
 
 interface SymbolInfo {
   name: string;
@@ -65,36 +66,7 @@ export class PhpParser implements Parser {
     const symbols = extractPhpSymbols(lines);
 
     if (symbols.length === 0) {
-      const linesPerChunk = 40;
-      const overlapLines = 5;
-      const chunks: Chunk[] = [];
-      let chunkIndex = 0;
-      let startLine = 0;
-
-      while (startLine < lines.length) {
-        const endLine = Math.min(startLine + linesPerChunk, lines.length);
-        const chunkContent = lines.slice(startLine, endLine).join('\n');
-
-        if (chunkContent.trim().length > 0) {
-          chunks.push({
-            id: chunkId(options.projectName, options.filePath, chunkIndex),
-            projectName: options.projectName,
-            filePath: options.filePath,
-            language: options.language,
-            startLine: startLine + 1,
-            endLine,
-            content: chunkContent,
-            tokenCount: Math.ceil(chunkContent.length / 4),
-          });
-          chunkIndex++;
-        }
-
-        if (endLine >= lines.length) break;
-        startLine = endLine - overlapLines;
-        if (startLine < 0) startLine = 0;
-      }
-
-      return chunks;
+      return slidingWindowChunks(lines, options);
     }
 
     return symbols.map((sym, idx) => ({

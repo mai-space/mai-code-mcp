@@ -1,6 +1,7 @@
 import { readFile } from 'fs/promises';
 import type { EmbeddingProvider } from '../embeddings/provider.js';
 import type { VectorStore } from '../store/store.js';
+import type { ProjectRegistry } from '../store/project-registry.js';
 import { walkDirectory } from './walker.js';
 import { chunkFile } from './chunker.js';
 import { batchProcess } from '../utils/concurrency.js';
@@ -24,7 +25,8 @@ export interface IndexResult {
 export async function indexProject(
   options: IndexOptions,
   provider: EmbeddingProvider,
-  store: VectorStore
+  store: VectorStore,
+  registry: ProjectRegistry
 ): Promise<IndexResult> {
   const startTime = Date.now();
   const concurrency = options.concurrency ?? 4;
@@ -37,6 +39,7 @@ export async function indexProject(
   await store.createCollection(options.projectName, provider.dimensions);
 
   let totalChunkCount = 0;
+  const newManifest = new Map<string, string>();
 
   await batchProcess(files, concurrency, async (file) => {
     try {
@@ -58,11 +61,14 @@ export async function indexProject(
         totalChunkCount += batch.length;
       }
 
+      newManifest.set(file.relativePath, file.contentHash);
       logger.debug({ filePath: file.relativePath, chunkCount: chunks.length }, 'Indexed file');
     } catch (err) {
       logger.error({ filePath: file.relativePath, err }, 'Failed to index file');
     }
   });
+
+  registry.saveManifest(options.projectName, newManifest);
 
   const duration = Date.now() - startTime;
   logger.info({ fileCount: files.length, chunkCount: totalChunkCount, duration }, 'Indexing complete');
@@ -77,7 +83,8 @@ export async function indexProject(
 export async function reindexProject(
   options: IndexOptions,
   provider: EmbeddingProvider,
-  store: VectorStore
+  store: VectorStore,
+  registry: ProjectRegistry
 ): Promise<IndexResult> {
   const startTime = Date.now();
   const concurrency = options.concurrency ?? 4;
@@ -85,20 +92,37 @@ export async function reindexProject(
   logger.info({ projectName: options.projectName }, 'Starting incremental reindex');
 
   const files = await walkDirectory(options.rootPath, options.additionalIgnore);
-  const existingFiles = await store.listFiles(options.projectName);
-  const existingSet = new Set(existingFiles.map((f) => f.filePath));
 
-  for (const existing of existingFiles) {
-    const stillExists = files.some((f) => f.relativePath === existing.filePath);
-    if (!stillExists) {
-      await store.deleteByFile(options.projectName, existing.filePath);
-      logger.debug({ filePath: existing.filePath }, 'Deleted removed file chunks');
+  // Ensure the collection exists (may have been deleted out-of-band)
+  await store.createCollection(options.projectName, provider.dimensions);
+
+  // Load stored manifest (filePath → contentHash) for diff detection
+  const oldManifest = registry.getManifest(options.projectName);
+  const newManifest = new Map<string, string>();
+
+  // Build a Set of current relative paths for O(1) removed-file detection
+  const currentPaths = new Set(files.map((f) => f.relativePath));
+
+  // Delete chunks for files that have been removed from disk
+  for (const filePath of oldManifest.keys()) {
+    if (!currentPaths.has(filePath)) {
+      await store.deleteByFile(options.projectName, filePath);
+      logger.debug({ filePath }, 'Deleted removed file chunks');
     }
   }
 
   let totalChunkCount = 0;
 
   await batchProcess(files, concurrency, async (file) => {
+    const prevHash = oldManifest.get(file.relativePath);
+
+    // Skip unchanged files
+    if (prevHash === file.contentHash) {
+      newManifest.set(file.relativePath, file.contentHash);
+      // Count existing chunks toward total (approximate via old manifest presence)
+      return;
+    }
+
     try {
       const content = await readFile(file.path, 'utf8');
       const chunks = chunkFile(content, file.relativePath, file.language, {
@@ -109,7 +133,8 @@ export async function reindexProject(
 
       if (chunks.length === 0) return;
 
-      if (existingSet.has(file.relativePath)) {
+      // Replace existing chunks for modified files
+      if (prevHash !== undefined) {
         await store.deleteByFile(options.projectName, file.relativePath);
       }
 
@@ -121,11 +146,18 @@ export async function reindexProject(
         await store.upsert(options.projectName, batch, embeddings);
         totalChunkCount += batch.length;
       }
+
+      newManifest.set(file.relativePath, file.contentHash);
     } catch (err) {
       logger.error({ filePath: file.relativePath, err }, 'Failed to reindex file');
     }
   });
 
+  registry.saveManifest(options.projectName, newManifest);
+
   const duration = Date.now() - startTime;
+  logger.info({ fileCount: files.length, chunkCount: totalChunkCount, duration }, 'Reindex complete');
+
   return { fileCount: files.length, chunkCount: totalChunkCount, duration };
 }
+

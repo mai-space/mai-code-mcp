@@ -65,7 +65,7 @@ export function createCLI(): Command {
           chunkOverlap: opts.chunkOverlap ?? config.chunkOverlap,
           concurrency: opts.concurrency ?? config.concurrency,
           additionalIgnore: config.ignore,
-        }, provider, store);
+        }, provider, store, registry);
 
         registry.upsert({
           name: opts.project,
@@ -118,7 +118,7 @@ export function createCLI(): Command {
           rootPath,
           concurrency: opts.concurrency ?? config.concurrency,
           additionalIgnore: config.ignore,
-        }, provider, store);
+        }, provider, store, registry);
 
         registry.upsert({
           ...record,
@@ -135,12 +135,10 @@ export function createCLI(): Command {
 
   program
     .command('serve')
-    .description('Start the MCP server')
-    .option('--port <n>', 'Port number', parseInt)
-    .option('--host <host>', 'Host')
-    .action(async (opts: { port?: number; host?: string }) => {
+    .description('Start the MCP server (communicates over stdio)')
+    .action(async () => {
       const config = loadConfig();
-      await startServer(config, opts.port, opts.host);
+      await startServer(config);
     });
 
   program

@@ -137,20 +137,27 @@ export class ChromaStore implements VectorStore {
 
   async listFiles(project: string): Promise<FileEntry[]> {
     const collection = await this.getCollection(project);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const results = await collection.get({ include: ['metadatas'] as any });
     const fileMap = new Map<string, { language: string; count: number }>();
 
-    for (const meta of results.metadatas) {
-      const m = meta as Record<string, unknown>;
-      const filePath = m.filePath as string;
-      const language = m.language as string;
-      const existing = fileMap.get(filePath);
-      if (existing) {
-        existing.count++;
-      } else {
-        fileMap.set(filePath, { language, count: 1 });
+    // Paginate to avoid loading the entire collection into memory at once
+    const PAGE_SIZE = 1000;
+    let offset = 0;
+    while (true) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const results = await collection.get({ include: ['metadatas'] as any, limit: PAGE_SIZE, offset });
+      for (const meta of results.metadatas) {
+        const m = meta as Record<string, unknown>;
+        const filePath = m.filePath as string;
+        const language = m.language as string;
+        const existing = fileMap.get(filePath);
+        if (existing) {
+          existing.count++;
+        } else {
+          fileMap.set(filePath, { language, count: 1 });
+        }
       }
+      if (results.metadatas.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
     }
 
     return Array.from(fileMap.entries()).map(([filePath, { language, count }]) => ({

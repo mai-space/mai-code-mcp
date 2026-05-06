@@ -35,6 +35,15 @@ export class ProjectRegistry {
         lastIndexedAt TEXT NOT NULL
       )
     `);
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS manifests (
+        projectName TEXT NOT NULL,
+        filePath TEXT NOT NULL,
+        contentHash TEXT NOT NULL,
+        PRIMARY KEY (projectName, filePath)
+      )
+    `);
   }
 
   upsert(record: ProjectRecord): void {
@@ -92,6 +101,32 @@ export class ProjectRegistry {
       createdAt: row.createdAt as string,
       lastIndexedAt: row.lastIndexedAt as string,
     };
+  }
+
+  /** Returns a map of filePath → contentHash for a project, or an empty map if none. */
+  getManifest(projectName: string): Map<string, string> {
+    const stmt = this.db.prepare('SELECT filePath, contentHash FROM manifests WHERE projectName = ?');
+    const rows = stmt.all(projectName) as Array<{ filePath: string; contentHash: string }>;
+    const map = new Map<string, string>();
+    for (const row of rows) {
+      map.set(row.filePath, row.contentHash);
+    }
+    return map;
+  }
+
+  /** Persists a full manifest snapshot for a project (replaces any previous manifest). */
+  saveManifest(projectName: string, manifest: Map<string, string>): void {
+    const deleteStmt = this.db.prepare('DELETE FROM manifests WHERE projectName = ?');
+    const insertStmt = this.db.prepare(
+      'INSERT INTO manifests (projectName, filePath, contentHash) VALUES (?, ?, ?)'
+    );
+    const saveAll = this.db.transaction(() => {
+      deleteStmt.run(projectName);
+      for (const [filePath, hash] of manifest) {
+        insertStmt.run(projectName, filePath, hash);
+      }
+    });
+    saveAll();
   }
 
   close(): void {
