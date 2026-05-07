@@ -100,8 +100,8 @@ export class QdrantStore implements VectorStore {
   }
 
   async getFileOutline(project: string, filePath: string): Promise<SymbolEntry[]> {
-    const points: Array<{ payload?: unknown }> = [];
-    let offset: number | string | Record<string, unknown> | undefined;
+    const outline: SymbolEntry[] = [];
+    let offset: number | string | undefined;
 
     while (true) {
       const response = await this.client.scroll(project, {
@@ -111,16 +111,9 @@ export class QdrantStore implements VectorStore {
         with_payload: ['id', 'symbolName', 'symbolKind', 'filePath', 'startLine', 'endLine', 'tokenCount'],
       });
 
-      points.push(...response.points);
-      const nextOffset = response.next_page_offset;
-      if (nextOffset == null) break;
-      offset = nextOffset;
-    }
-
-    return points
-      .map((p) => {
-        const payload = p.payload as Record<string, unknown>;
-        return {
+      for (const point of response.points) {
+        const payload = point.payload as Record<string, unknown>;
+        outline.push({
           chunkId: payload.id as string,
           symbolName: (payload.symbolName as string) ?? '',
           symbolKind: (payload.symbolKind as string) ?? '',
@@ -128,9 +121,15 @@ export class QdrantStore implements VectorStore {
           startLine: payload.startLine as number,
           endLine: payload.endLine as number,
           tokenCount: payload.tokenCount as number,
-        };
-      })
-      .sort((a, b) => a.startLine - b.startLine);
+        });
+      }
+
+      const nextOffset = response.next_page_offset;
+      if (nextOffset == null) break;
+      offset = nextOffset as number | string;
+    }
+
+    return outline.sort((a, b) => a.startLine - b.startLine);
   }
 
   async listFiles(project: string): Promise<FileEntry[]> {
