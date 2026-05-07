@@ -96,7 +96,7 @@ export async function startServer(config: Config): Promise<void> {
             return { content: [{ type: 'text', text: JSON.stringify({ results: [] }) }] };
           }
 
-          // Group projects by model+store key so we embed once per unique model
+          // Group projects by model+store key so we embed once per unique model+store pair
           const groups = new Map<string, typeof allProjects>();
           for (const p of allProjects) {
             const key = `${p.model}::${p.store}`;

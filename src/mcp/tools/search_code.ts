@@ -167,7 +167,6 @@ export function getSearchCodeMultiTool() {
 async function searchOneProject(
   projectName: string,
   args: SearchCodeArgs,
-  provider: EmbeddingProvider,
   store: VectorStore,
   embedding: number[]
 ): Promise<SearchResultPreview[]> {
@@ -195,14 +194,14 @@ export async function handleSearchCode(
   const [embedding] = await provider.embed([args.query]);
 
   if (args.project) {
-    const results = await searchOneProject(args.project, args, provider, store, embedding);
+    const results = await searchOneProject(args.project, args, store, embedding);
     return { results };
   }
 
   // No project specified → search all available projects that share this store
   const projects = allProjects ?? [];
   const perProject = await Promise.all(
-    projects.map((p) => searchOneProject(p.name, args, provider, store, embedding))
+    projects.map((p) => searchOneProject(p.name, args, store, embedding))
   );
 
   // Merge and re-rank across projects by score (descending)

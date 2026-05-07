@@ -100,13 +100,23 @@ export class QdrantStore implements VectorStore {
   }
 
   async getFileOutline(project: string, filePath: string): Promise<SymbolEntry[]> {
-    const results = await this.client.scroll(project, {
-      filter: { must: [{ key: 'filePath', match: { value: filePath } }] },
-      limit: 1000,
-      with_payload: true,
-    });
+    const points: Array<{ payload?: unknown }> = [];
+    let offset: number | string | null | undefined = undefined;
 
-    return results.points
+    while (true) {
+      const response = await this.client.scroll(project, {
+        filter: { must: [{ key: 'filePath', match: { value: filePath } }] },
+        limit: 1000,
+        offset,
+        with_payload: ['id', 'symbolName', 'symbolKind', 'filePath', 'startLine', 'endLine', 'tokenCount'],
+      });
+
+      points.push(...response.points);
+      if (response.next_page_offset == null) break;
+      offset = response.next_page_offset as number | string;
+    }
+
+    return points
       .map((p) => {
         const payload = p.payload as Record<string, unknown>;
         return {
