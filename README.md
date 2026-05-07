@@ -70,6 +70,7 @@ This clones the repository to `~/.mai-code-mcp`, builds it, installs the `mai-co
   ```
 
 - To skip automatic Qdrant setup, set `MAI_CODE_SKIP_QDRANT_SETUP=1`.
+- To override the Qdrant container name or published ports, set `MAI_CODE_QDRANT_CONTAINER`, `MAI_CODE_QDRANT_HTTP_PORT`, and/or `MAI_CODE_QDRANT_GRPC_PORT`.
 
 Set `MAI_CODE_DIR` to override the install location:
 

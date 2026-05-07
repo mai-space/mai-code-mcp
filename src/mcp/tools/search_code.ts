@@ -36,16 +36,21 @@ function createPreview(content: string): string {
   let endIndex = content.length;
 
   for (let i = 0; i < content.length; i += 1) {
-    if (content[i] !== '\n') continue;
-    newlineCount += 1;
-    if (newlineCount === MAX_PREVIEW_LINES) {
-      endIndex = i;
-      break;
+    if (content[i] === '\n') {
+      newlineCount += 1;
+      if (newlineCount === MAX_PREVIEW_LINES) {
+        endIndex = i;
+        break;
+      }
     }
   }
 
   const lines = content.slice(0, endIndex).trimEnd();
-  if (lines.length <= MAX_PREVIEW_CHARS) return lines;
+  const wasLineTruncated = endIndex < content.length;
+  if (lines.length <= MAX_PREVIEW_CHARS) {
+    return wasLineTruncated ? `${lines}${PREVIEW_ELLIPSIS}` : lines;
+  }
+
   return `${lines.slice(0, MAX_PREVIEW_CHARS - PREVIEW_ELLIPSIS.length).trimEnd()}${PREVIEW_ELLIPSIS}`;
 }
 

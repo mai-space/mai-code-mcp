@@ -32,6 +32,13 @@ QDRANT_CONTAINER_NAME="${MAI_CODE_QDRANT_CONTAINER:-mai-code-qdrant}"
 QDRANT_HTTP_PORT="${MAI_CODE_QDRANT_HTTP_PORT:-6333}"
 QDRANT_GRPC_PORT="${MAI_CODE_QDRANT_GRPC_PORT:-6334}"
 
+qdrant_manual_command() {
+  printf 'docker run -d --name %s -p %s:6333 -p %s:6334 qdrant/qdrant' \
+    "${QDRANT_CONTAINER_NAME}" \
+    "${QDRANT_HTTP_PORT}" \
+    "${QDRANT_GRPC_PORT}"
+}
+
 ensure_qdrant() {
   if [ "${MAI_CODE_SKIP_QDRANT_SETUP:-0}" = "1" ]; then
     info "Skipping Qdrant setup because MAI_CODE_SKIP_QDRANT_SETUP=1."
@@ -39,12 +46,12 @@ ensure_qdrant() {
   fi
 
   if ! command -v docker >/dev/null 2>&1; then
-    warn "Docker was not found. Start Qdrant manually with: docker run -d -p 6333:6333 -p 6334:6334 qdrant/qdrant"
+    warn "Docker was not found. Start Qdrant manually with: $(qdrant_manual_command)"
     return
   fi
 
   if ! docker info >/dev/null 2>&1; then
-    warn "Docker is installed but not running. Start Qdrant manually with: docker run -d -p 6333:6333 -p 6334:6334 qdrant/qdrant"
+    warn "Docker is installed but not running. Start Qdrant manually with: $(qdrant_manual_command)"
     return
   fi
 
@@ -56,7 +63,7 @@ ensure_qdrant() {
   if docker ps -a --format '{{.Names}}' | grep -Fxq "${QDRANT_CONTAINER_NAME}"; then
     info "Starting existing Qdrant container '${QDRANT_CONTAINER_NAME}' …"
     if docker start "${QDRANT_CONTAINER_NAME}" >/dev/null; then
-      ok "Qdrant is running on http://localhost:${QDRANT_HTTP_PORT}"
+      ok "Qdrant container '${QDRANT_CONTAINER_NAME}' is running."
     else
       warn "Could not start existing Qdrant container '${QDRANT_CONTAINER_NAME}'. Start it manually with: docker start ${QDRANT_CONTAINER_NAME}"
     fi
@@ -71,7 +78,7 @@ ensure_qdrant() {
     qdrant/qdrant >/dev/null; then
     ok "Qdrant is running on http://localhost:${QDRANT_HTTP_PORT}"
   else
-    warn "Could not start Qdrant automatically. Start it manually with: docker run -d -p 6333:6333 -p 6334:6334 qdrant/qdrant"
+    warn "Could not start Qdrant automatically. Start it manually with: $(qdrant_manual_command)"
   fi
 }
 
