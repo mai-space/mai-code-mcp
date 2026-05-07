@@ -1,5 +1,8 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
-import type { VectorStore, Chunk, Filter, SearchResult, FileEntry, CollectionStats } from './store.js';
+import type { VectorStore, Chunk, Filter, SearchResult, FileEntry, CollectionStats, SymbolEntry } from './store.js';
+
+type QdrantScrollResponse = Awaited<ReturnType<QdrantClient['scroll']>>;
+type QdrantScrollOffset = Exclude<QdrantScrollResponse['next_page_offset'], null | undefined>;
 
 export class QdrantStore implements VectorStore {
   private client: QdrantClient;
@@ -84,6 +87,52 @@ export class QdrantStore implements VectorStore {
     } catch {
       return null;
     }
+  }
+
+  async getByIds(project: string, ids: string[]): Promise<Chunk[]> {
+    if (ids.length === 0) return [];
+    try {
+      const results = await this.client.retrieve(project, {
+        ids: ids.map((id) => this.hashToUUID(id)),
+        with_payload: true,
+      });
+      return results.map((r) => this.payloadToChunk(r.payload as Record<string, unknown>));
+    } catch {
+      return [];
+    }
+  }
+
+  async getFileOutline(project: string, filePath: string): Promise<SymbolEntry[]> {
+    const outline: SymbolEntry[] = [];
+    let offset: QdrantScrollOffset | undefined;
+
+    while (true) {
+      const response = await this.client.scroll(project, {
+        filter: { must: [{ key: 'filePath', match: { value: filePath } }] },
+        limit: 1000,
+        offset,
+        with_payload: ['id', 'symbolName', 'symbolKind', 'filePath', 'startLine', 'endLine', 'tokenCount'],
+      });
+
+      for (const point of response.points) {
+        const payload = point.payload as Record<string, unknown>;
+        outline.push({
+          chunkId: payload.id as string,
+          symbolName: (payload.symbolName as string) ?? '',
+          symbolKind: (payload.symbolKind as string) ?? '',
+          filePath: payload.filePath as string,
+          startLine: payload.startLine as number,
+          endLine: payload.endLine as number,
+          tokenCount: payload.tokenCount as number,
+        });
+      }
+
+      const nextOffset = response.next_page_offset;
+      if (nextOffset === null || nextOffset === undefined) break;
+      offset = nextOffset;
+    }
+
+    return outline.sort((a, b) => a.startLine - b.startLine);
   }
 
   async listFiles(project: string): Promise<FileEntry[]> {

@@ -1,6 +1,6 @@
 import { ChromaClient } from 'chromadb';
 import type { Collection } from 'chromadb';
-import type { VectorStore, Chunk, Filter, SearchResult, FileEntry, CollectionStats } from './store.js';
+import type { VectorStore, Chunk, Filter, SearchResult, FileEntry, CollectionStats, SymbolEntry } from './store.js';
 
 export class ChromaStore implements VectorStore {
   private client: ChromaClient;
@@ -133,6 +133,55 @@ export class ChromaStore implements VectorStore {
     } catch {
       return null;
     }
+  }
+
+  async getByIds(project: string, ids: string[]): Promise<Chunk[]> {
+    if (ids.length === 0) return [];
+    try {
+      const collection = await this.getCollection(project);
+      const results = await collection.get({ ids });
+      return results.ids.map((id, i) => {
+        const meta = results.metadatas[i] as Record<string, unknown>;
+        return {
+          id,
+          projectName: meta.projectName as string,
+          filePath: meta.filePath as string,
+          language: meta.language as string,
+          symbolName: (meta.symbolName as string) || undefined,
+          symbolKind: (meta.symbolKind as string) || undefined,
+          startLine: meta.startLine as number,
+          endLine: meta.endLine as number,
+          content: results.documents[i] ?? '',
+          tokenCount: meta.tokenCount as number,
+        };
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  async getFileOutline(project: string, filePath: string): Promise<SymbolEntry[]> {
+    const collection = await this.getCollection(project);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const results = await collection.get({
+      where: { filePath: { $eq: filePath } },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      include: ['metadatas'] as any,
+    });
+    return results.ids
+      .map((id, i) => {
+        const meta = results.metadatas[i] as Record<string, unknown>;
+        return {
+          chunkId: id,
+          symbolName: (meta.symbolName as string) ?? '',
+          symbolKind: (meta.symbolKind as string) ?? '',
+          filePath: meta.filePath as string,
+          startLine: meta.startLine as number,
+          endLine: meta.endLine as number,
+          tokenCount: meta.tokenCount as number,
+        };
+      })
+      .sort((a, b) => a.startLine - b.startLine);
   }
 
   async listFiles(project: string): Promise<FileEntry[]> {

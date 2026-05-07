@@ -19,8 +19,20 @@ import {
   type SearchCodeArgs,
   type SearchCodeMultiArgs,
 } from './tools/search_code.js';
-import { getGetChunkTool, handleGetChunk, type GetChunkArgs } from './tools/get_chunk.js';
+import {
+  getGetChunkTool,
+  getGetChunksTool,
+  handleGetChunk,
+  handleGetChunks,
+  type GetChunkArgs,
+  type GetChunksArgs,
+} from './tools/get_chunk.js';
 import { getListFilesTool, handleListFiles, type ListFilesArgs } from './tools/list_files.js';
+import {
+  getGetFileOutlineTool,
+  handleGetFileOutline,
+  type GetFileOutlineArgs,
+} from './tools/get_file_outline.js';
 import { getProjectStats } from './resources/project_stats.js';
 import { logger } from '../utils/logger.js';
 
@@ -28,7 +40,7 @@ export async function startServer(config: Config): Promise<void> {
   const registry = new ProjectRegistry();
 
   const server = new Server(
-    { name: 'mai-code-mcp', version: '0.1.0' },
+    { name: 'mai-code-mcp', version: '0.2.0' },
     { capabilities: { tools: {}, resources: {} } }
   );
 
@@ -38,6 +50,8 @@ export async function startServer(config: Config): Promise<void> {
       getSearchCodeTool(),
       getSearchCodeMultiTool(),
       getGetChunkTool(),
+      getGetChunksTool(),
+      getGetFileOutlineTool(),
       getListFilesTool(),
     ],
   }));
@@ -56,23 +70,65 @@ export async function startServer(config: Config): Promise<void> {
 
         case 'search_code': {
           const searchArgs = args as unknown as SearchCodeArgs;
-          const record = registry.get(searchArgs.project);
-          if (!record) throw new Error(`Project '${searchArgs.project}' not found`);
 
-          const provider = createEmbeddingProvider(record.model, {
-            ollama: config.ollama,
-            openai: config.openai,
-            cohere: config.cohere,
-          });
-          const store = createVectorStore(record.store, {
-            qdrant: config.qdrant,
-            chroma: config.chroma,
-          });
+          if (searchArgs.project) {
+            // Single-project path: resolve model + store for that project
+            const record = registry.get(searchArgs.project);
+            if (!record) throw new Error(`Project '${searchArgs.project}' not found`);
 
-          const result = await handleSearchCode(searchArgs, provider, store);
-          return {
-            content: [{ type: 'text', text: JSON.stringify(result) }],
-          };
+            const provider = createEmbeddingProvider(record.model, {
+              ollama: config.ollama,
+              openai: config.openai,
+              cohere: config.cohere,
+            });
+            const store = createVectorStore(record.store, {
+              qdrant: config.qdrant,
+              chroma: config.chroma,
+            });
+
+            const result = await handleSearchCode(searchArgs, provider, store);
+            return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+          }
+
+          // No project specified → search all projects grouped by model+store
+          const allProjects = registry.list();
+          if (allProjects.length === 0) {
+            return { content: [{ type: 'text', text: JSON.stringify({ results: [] }) }] };
+          }
+
+          // Group projects by model+store key so we embed once per unique model+store pair
+          const groups = new Map<string, typeof allProjects>();
+          for (const p of allProjects) {
+            const key = `${p.model}::${p.store}`;
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key)!.push(p);
+          }
+
+          const perGroupResults = await Promise.all(
+            Array.from(groups.values()).map(async (groupProjects) => {
+              const ref = groupProjects[0];
+              const provider = createEmbeddingProvider(ref.model, {
+                ollama: config.ollama,
+                openai: config.openai,
+                cohere: config.cohere,
+              });
+              const store = createVectorStore(ref.store, {
+                qdrant: config.qdrant,
+                chroma: config.chroma,
+              });
+              const { results } = await handleSearchCode(searchArgs, provider, store, groupProjects);
+              return results;
+            })
+          );
+
+          // Merge across groups, re-rank, and cap at topK
+          const topK = searchArgs.topK ?? 5;
+          const merged = perGroupResults
+            .flat()
+            .sort((a, b) => b.score - a.score)
+            .slice(0, topK);
+
+          return { content: [{ type: 'text', text: JSON.stringify({ results: merged }) }] };
         }
 
         case 'search_code_multi': {
@@ -81,10 +137,9 @@ export async function startServer(config: Config): Promise<void> {
             throw new Error('No projects specified');
           }
 
-          // Validate that all requested projects exist and share the same model + store
-          const projectRecords = multiArgs.projects.map((name) => {
-            const rec = registry.get(name);
-            if (!rec) throw new Error(`Project '${name}' not found`);
+          const projectRecords = multiArgs.projects.map((pName) => {
+            const rec = registry.get(pName);
+            if (!rec) throw new Error(`Project '${pName}' not found`);
             return rec;
           });
 
@@ -116,9 +171,7 @@ export async function startServer(config: Config): Promise<void> {
           });
 
           const result = await handleSearchCodeMulti(multiArgs, provider, store);
-          return {
-            content: [{ type: 'text', text: JSON.stringify(result) }],
-          };
+          return { content: [{ type: 'text', text: JSON.stringify(result) }] };
         }
 
         case 'get_chunk': {
@@ -132,9 +185,35 @@ export async function startServer(config: Config): Promise<void> {
           });
 
           const result = await handleGetChunk(chunkArgs, store);
-          return {
-            content: [{ type: 'text', text: JSON.stringify(result) }],
-          };
+          return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+        }
+
+        case 'get_chunks': {
+          const chunksArgs = args as unknown as GetChunksArgs;
+          const record = registry.get(chunksArgs.project);
+          if (!record) throw new Error(`Project '${chunksArgs.project}' not found`);
+
+          const store = createVectorStore(record.store, {
+            qdrant: config.qdrant,
+            chroma: config.chroma,
+          });
+
+          const result = await handleGetChunks(chunksArgs, store);
+          return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+        }
+
+        case 'get_file_outline': {
+          const outlineArgs = args as unknown as GetFileOutlineArgs;
+          const record = registry.get(outlineArgs.project);
+          if (!record) throw new Error(`Project '${outlineArgs.project}' not found`);
+
+          const store = createVectorStore(record.store, {
+            qdrant: config.qdrant,
+            chroma: config.chroma,
+          });
+
+          const result = await handleGetFileOutline(outlineArgs, store);
+          return { content: [{ type: 'text', text: JSON.stringify(result) }] };
         }
 
         case 'list_files': {
@@ -148,9 +227,7 @@ export async function startServer(config: Config): Promise<void> {
           });
 
           const result = await handleListFiles(filesArgs, store);
-          return {
-            content: [{ type: 'text', text: JSON.stringify(result) }],
-          };
+          return { content: [{ type: 'text', text: JSON.stringify(result) }] };
         }
 
         default:
@@ -216,7 +293,7 @@ export async function startServer(config: Config): Promise<void> {
     throw new Error(`Unknown resource: ${uri}`);
   });
 
-  logger.info('Starting MCP server (stdio transport)');
+  logger.info('Starting MCP server v0.2.0 (stdio transport)');
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
