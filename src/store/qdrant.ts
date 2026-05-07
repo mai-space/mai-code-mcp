@@ -101,7 +101,7 @@ export class QdrantStore implements VectorStore {
 
   async getFileOutline(project: string, filePath: string): Promise<SymbolEntry[]> {
     const points: Array<{ payload?: unknown }> = [];
-    let offset: number | string | null | undefined = undefined;
+    let offset: number | string | Record<string, unknown> | undefined;
 
     while (true) {
       const response = await this.client.scroll(project, {
@@ -112,8 +112,9 @@ export class QdrantStore implements VectorStore {
       });
 
       points.push(...response.points);
-      if (response.next_page_offset == null) break;
-      offset = response.next_page_offset as number | string;
+      const nextOffset = response.next_page_offset;
+      if (nextOffset == null) break;
+      offset = nextOffset;
     }
 
     return points
