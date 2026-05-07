@@ -50,7 +50,7 @@ export async function startServer(config: Config): Promise<void> {
         case 'list_projects': {
           const result = await handleListProjects(registry);
           return {
-            content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+            content: [{ type: 'text', text: JSON.stringify(result) }],
           };
         }
 
@@ -71,7 +71,7 @@ export async function startServer(config: Config): Promise<void> {
 
           const result = await handleSearchCode(searchArgs, provider, store);
           return {
-            content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+            content: [{ type: 'text', text: JSON.stringify(result) }],
           };
         }
 
@@ -117,7 +117,7 @@ export async function startServer(config: Config): Promise<void> {
 
           const result = await handleSearchCodeMulti(multiArgs, provider, store);
           return {
-            content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+            content: [{ type: 'text', text: JSON.stringify(result) }],
           };
         }
 
@@ -133,7 +133,7 @@ export async function startServer(config: Config): Promise<void> {
 
           const result = await handleGetChunk(chunkArgs, store);
           return {
-            content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+            content: [{ type: 'text', text: JSON.stringify(result) }],
           };
         }
 
@@ -149,7 +149,7 @@ export async function startServer(config: Config): Promise<void> {
 
           const result = await handleListFiles(filesArgs, store);
           return {
-            content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+            content: [{ type: 'text', text: JSON.stringify(result) }],
           };
         }
 

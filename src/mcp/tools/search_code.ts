@@ -15,10 +15,63 @@ export interface SearchCodeMultiArgs {
   topK?: number;
 }
 
+export interface SearchResultPreview {
+  chunkId: string;
+  filePath: string;
+  language: string;
+  symbolName?: string;
+  symbolKind?: string;
+  startLine: number;
+  endLine: number;
+  score: number;
+  preview: string;
+}
+
+const MAX_PREVIEW_LINES = 20;
+const MAX_PREVIEW_CHARS = 800;
+const PREVIEW_ELLIPSIS = '…';
+
+function createPreview(content: string): string {
+  let newlineCount = 0;
+  let endIndex = content.length;
+
+  for (let i = 0; i < content.length; i += 1) {
+    if (content[i] === '\n') {
+      newlineCount += 1;
+      if (newlineCount === MAX_PREVIEW_LINES) {
+        endIndex = i;
+        break;
+      }
+    }
+  }
+
+  const lines = content.slice(0, endIndex).trimEnd();
+  const wasLineTruncated = endIndex < content.length;
+  if (lines.length <= MAX_PREVIEW_CHARS) {
+    return wasLineTruncated ? `${lines}${PREVIEW_ELLIPSIS}` : lines;
+  }
+
+  return `${lines.slice(0, MAX_PREVIEW_CHARS - PREVIEW_ELLIPSIS.length).trimEnd()}${PREVIEW_ELLIPSIS}`;
+}
+
+function summarizeResult(result: SearchResult): SearchResultPreview {
+  return {
+    chunkId: result.chunk.id,
+    filePath: result.chunk.filePath,
+    language: result.chunk.language,
+    symbolName: result.chunk.symbolName,
+    symbolKind: result.chunk.symbolKind,
+    startLine: result.chunk.startLine,
+    endLine: result.chunk.endLine,
+    score: result.score,
+    preview: createPreview(result.chunk.content),
+  };
+}
+
 export function getSearchCodeTool() {
   return {
     name: 'search_code',
-    description: 'Search for code chunks by semantic similarity',
+    description: 'Search for code chunks by semantic similarity and return concise previews; use get_chunk for full content',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -36,7 +89,7 @@ export function getSearchCodeTool() {
 export function getSearchCodeMultiTool() {
   return {
     name: 'search_code_multi',
-    description: 'Search across multiple projects',
+    description: 'Search across multiple projects and return concise previews; use get_chunk for full content',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -53,28 +106,28 @@ export async function handleSearchCode(
   args: SearchCodeArgs,
   provider: EmbeddingProvider,
   store: VectorStore
-): Promise<{ results: SearchResult[] }> {
+): Promise<{ results: SearchResultPreview[] }> {
   const [embedding] = await provider.embed([args.query]);
   const filter: Filter = {};
   if (args.language) filter.language = args.language;
   if (args.symbolKind) filter.symbolKind = args.symbolKind;
 
   const results = await store.search(args.project, embedding, args.topK ?? 10, filter);
-  return { results };
+  return { results: results.map(summarizeResult) };
 }
 
 export async function handleSearchCodeMulti(
   args: SearchCodeMultiArgs,
   provider: EmbeddingProvider,
   store: VectorStore
-): Promise<{ byProject: Record<string, SearchResult[]> }> {
+): Promise<{ byProject: Record<string, SearchResultPreview[]> }> {
   const [embedding] = await provider.embed([args.query]);
-  const byProject: Record<string, SearchResult[]> = {};
+  const byProject: Record<string, SearchResultPreview[]> = {};
 
   await Promise.all(
     args.projects.map(async (project) => {
       const results = await store.search(project, embedding, args.topK ?? 10);
-      byProject[project] = results;
+      byProject[project] = results.map(summarizeResult);
     })
   );
 
