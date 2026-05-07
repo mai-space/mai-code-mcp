@@ -1,6 +1,9 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
 import type { VectorStore, Chunk, Filter, SearchResult, FileEntry, CollectionStats, SymbolEntry } from './store.js';
 
+type QdrantScrollResponse = Awaited<ReturnType<QdrantClient['scroll']>>;
+type QdrantScrollOffset = Exclude<QdrantScrollResponse['next_page_offset'], null | undefined>;
+
 export class QdrantStore implements VectorStore {
   private client: QdrantClient;
 
@@ -101,7 +104,7 @@ export class QdrantStore implements VectorStore {
 
   async getFileOutline(project: string, filePath: string): Promise<SymbolEntry[]> {
     const outline: SymbolEntry[] = [];
-    let offset: number | string | undefined;
+    let offset: QdrantScrollOffset | undefined;
 
     while (true) {
       const response = await this.client.scroll(project, {
@@ -125,8 +128,8 @@ export class QdrantStore implements VectorStore {
       }
 
       const nextOffset = response.next_page_offset;
-      if (nextOffset == null) break;
-      offset = nextOffset as number | string;
+      if (nextOffset === null || nextOffset === undefined) break;
+      offset = nextOffset;
     }
 
     return outline.sort((a, b) => a.startLine - b.startLine);
