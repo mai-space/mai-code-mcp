@@ -32,16 +32,16 @@ const MAX_PREVIEW_CHARS = 800;
 const PREVIEW_ELLIPSIS = '…';
 
 function createPreview(content: string): string {
-  let lineCount = 1;
+  let newlineCount = 0;
   let endIndex = content.length;
 
   for (let i = 0; i < content.length; i += 1) {
     if (content[i] !== '\n') continue;
-    if (lineCount === MAX_PREVIEW_LINES) {
+    newlineCount += 1;
+    if (newlineCount === MAX_PREVIEW_LINES) {
       endIndex = i;
       break;
     }
-    lineCount += 1;
   }
 
   const lines = content.slice(0, endIndex).trimEnd();
