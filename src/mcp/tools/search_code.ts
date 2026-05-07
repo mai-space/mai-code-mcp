@@ -29,11 +29,24 @@ export interface SearchResultPreview {
 
 const MAX_PREVIEW_LINES = 20;
 const MAX_PREVIEW_CHARS = 800;
+const PREVIEW_ELLIPSIS = '…';
 
 function createPreview(content: string): string {
-  const lines = content.split('\n').slice(0, MAX_PREVIEW_LINES).join('\n').trimEnd();
+  let lineCount = 1;
+  let endIndex = content.length;
+
+  for (let i = 0; i < content.length; i += 1) {
+    if (content[i] !== '\n') continue;
+    if (lineCount === MAX_PREVIEW_LINES) {
+      endIndex = i;
+      break;
+    }
+    lineCount += 1;
+  }
+
+  const lines = content.slice(0, endIndex).trimEnd();
   if (lines.length <= MAX_PREVIEW_CHARS) return lines;
-  return `${lines.slice(0, MAX_PREVIEW_CHARS - 1).trimEnd()}…`;
+  return `${lines.slice(0, MAX_PREVIEW_CHARS - PREVIEW_ELLIPSIS.length).trimEnd()}${PREVIEW_ELLIPSIS}`;
 }
 
 function summarizeResult(result: SearchResult): SearchResultPreview {
