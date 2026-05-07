@@ -61,7 +61,17 @@ curl -fsSL https://raw.githubusercontent.com/mai-space/mai-code-mcp/main/install
 
 > **Tip:** Before piping to bash you can review the script at the URL above.
 
-This clones the repository to `~/.mai-code-mcp`, builds it, and installs the `mai-code` binary globally. Set `MAI_CODE_DIR` to override the install location:
+This clones the repository to `~/.mai-code-mcp`, builds it, installs the `mai-code` binary globally, and then tries to start a local Qdrant container via Docker on ports `6333` and `6334`.
+
+- If Docker is unavailable or not running, the installer prints the manual command:
+
+  ```bash
+  docker run -d -p 6333:6333 -p 6334:6334 qdrant/qdrant
+  ```
+
+- To skip automatic Qdrant setup, set `MAI_CODE_SKIP_QDRANT_SETUP=1`.
+
+Set `MAI_CODE_DIR` to override the install location:
 
 ```bash
 MAI_CODE_DIR=/opt/mai-code-mcp curl -fsSL https://raw.githubusercontent.com/mai-space/mai-code-mcp/main/install.sh | bash
@@ -307,13 +317,15 @@ Restart Claude Desktop after updating the configuration. The MCP tools listed be
 | Tool | Description | Required inputs |
 |---|---|---|
 | `list_projects` | List all indexed projects with metadata | — |
-| `search_code` | Semantic search within a single project | `query`, `project` |
-| `search_code_multi` | Semantic search across multiple projects (must share the same model and store) | `query`, `projects[]` |
+| `search_code` | Semantic search within a single project, returning compact previews plus `chunkId` | `query`, `project` |
+| `search_code_multi` | Semantic search across multiple projects (must share the same model and store), returning compact previews plus `chunkId` | `query`, `projects[]` |
 | `get_chunk` | Retrieve a specific code chunk by ID | `project`, `chunkId` |
 | `list_files` | List all indexed files in a project | `project` |
 
 **`search_code` optional inputs:** `topK` (default 10), `language`, `symbolKind`  
 **`search_code_multi` optional inputs:** `topK` (default 10 per project)
+
+Use `get_chunk` when you need the full chunk body after `search_code` or `search_code_multi`.
 
 ---
 
