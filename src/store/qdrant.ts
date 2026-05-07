@@ -1,5 +1,5 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
-import type { VectorStore, Chunk, Filter, SearchResult, FileEntry, CollectionStats } from './store.js';
+import type { VectorStore, Chunk, Filter, SearchResult, FileEntry, CollectionStats, SymbolEntry } from './store.js';
 
 export class QdrantStore implements VectorStore {
   private client: QdrantClient;
@@ -84,6 +84,42 @@ export class QdrantStore implements VectorStore {
     } catch {
       return null;
     }
+  }
+
+  async getByIds(project: string, ids: string[]): Promise<Chunk[]> {
+    if (ids.length === 0) return [];
+    try {
+      const results = await this.client.retrieve(project, {
+        ids: ids.map((id) => this.hashToUUID(id)),
+        with_payload: true,
+      });
+      return results.map((r) => this.payloadToChunk(r.payload as Record<string, unknown>));
+    } catch {
+      return [];
+    }
+  }
+
+  async getFileOutline(project: string, filePath: string): Promise<SymbolEntry[]> {
+    const results = await this.client.scroll(project, {
+      filter: { must: [{ key: 'filePath', match: { value: filePath } }] },
+      limit: 1000,
+      with_payload: true,
+    });
+
+    return results.points
+      .map((p) => {
+        const payload = p.payload as Record<string, unknown>;
+        return {
+          chunkId: payload.id as string,
+          symbolName: (payload.symbolName as string) ?? '',
+          symbolKind: (payload.symbolKind as string) ?? '',
+          filePath: payload.filePath as string,
+          startLine: payload.startLine as number,
+          endLine: payload.endLine as number,
+          tokenCount: payload.tokenCount as number,
+        };
+      })
+      .sort((a, b) => a.startLine - b.startLine);
   }
 
   async listFiles(project: string): Promise<FileEntry[]> {

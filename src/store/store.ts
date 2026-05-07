@@ -47,6 +47,16 @@ export interface CollectionStats {
   vectorCount: number;
 }
 
+export interface SymbolEntry {
+  chunkId: string;
+  symbolName: string;
+  symbolKind: string;
+  filePath: string;
+  startLine: number;
+  endLine: number;
+  tokenCount: number;
+}
+
 export interface VectorStore {
   createCollection(project: string, dimensions: number): Promise<void>;
   deleteCollection(project: string): Promise<void>;
@@ -54,6 +64,8 @@ export interface VectorStore {
   upsert(project: string, chunks: Chunk[], embeddings: number[][]): Promise<void>;
   search(project: string, queryEmbedding: number[], topK: number, filter?: Filter): Promise<SearchResult[]>;
   getById(project: string, id: string): Promise<Chunk | null>;
+  getByIds(project: string, ids: string[]): Promise<Chunk[]>;
+  getFileOutline(project: string, filePath: string): Promise<SymbolEntry[]>;
   listFiles(project: string): Promise<FileEntry[]>;
   stats(project: string): Promise<CollectionStats>;
   deleteByFile(project: string, filePath: string): Promise<void>;
